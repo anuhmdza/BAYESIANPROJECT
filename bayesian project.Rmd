@@ -1,0 +1,59 @@
+---
+title: "BAYESIAN PROJECT"
+author: "Ana Mendoza"
+date: "2025-04-08"
+output: word_document
+---
+load and clean the dataset 
+```{r}
+# Load your dataset
+df <- read.csv("/Users/anamdza/Downloads/bayesianproject.csv")
+
+# Keep only rows with both Sample Size and Number of Cases
+df_clean <- df[!is.na(df$Sample.Size) & !is.na(df$Number.of.Cases), ]
+
+# Rename for simplicity
+df_clean$y <- df_clean$Number.of.Cases
+df_clean$n <- df_clean$Sample.Size
+```
+prepare data for jags 
+```{r}
+# Build the data list for JAGS
+data_list <- list(
+  y = as.integer(df_clean$y),
+  n = as.integer(df_clean$n),
+  N = nrow(df_clean)
+)
+```
+define and run jags model
+```{r}
+library(rjags)
+
+# Model: Binomial likelihood with uniform prior on theta
+model_string <- "
+model {
+  for (i in 1:N) {
+    y[i] ~ dbin(theta[i], n[i])
+    theta[i] ~ dbeta(1, 1)
+  }
+}
+"
+
+# Compile and run the model
+jags_model <- jags.model(textConnection(model_string), data = data_list, n.chains = 3)
+update(jags_model, 1000)  # Burn-in
+samples <- coda.samples(jags_model, variable.names = c("theta"), n.iter = 5000)
+```
+
+plot posterior for one study 
+```{r}
+posterior_matrix <- as.matrix(samples)
+
+# Plot histogram for theta[1]
+hist(posterior_matrix[, 1],
+     main = "Posterior Distribution for Study 1",
+     xlab = "Prevalence Rate",
+     col = "lightblue", border = "white")
+```
+
+
