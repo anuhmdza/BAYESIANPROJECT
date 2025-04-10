@@ -7,7 +7,7 @@ output: word_document
 load and clean the dataset 
 ```{r}
 # Load your dataset
-df <- read.csv("/Users/anamdza/Downloads/bayesianproject.csv")
+df <- read.csv("Autism Studies Dataset.csv")
 
 # Keep only rows with both Sample Size and Number of Cases
 df_clean <- df[!is.na(df$Sample.Size) & !is.na(df$Number.of.Cases), ]
