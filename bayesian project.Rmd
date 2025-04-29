@@ -6,30 +6,26 @@ output: word_document
 ---
 load and clean the dataset 
 ```{r}
-# Load your dataset
 df <- read.csv("Autism Studies Dataset.csv")
 
-# Keep only rows with both Sample Size and Number of Cases
 df_clean <- df[!is.na(df$Sample.Size) & !is.na(df$Number.of.Cases), ]
 
-# Rename for simplicity
 df_clean$y <- df_clean$Number.of.Cases
 df_clean$n <- df_clean$Sample.Size
 ```
 prepare data for jags 
 ```{r}
-# Build the data list for JAGS
 data_list <- list(
   y = as.integer(df_clean$y),
   n = as.integer(df_clean$n),
   N = nrow(df_clean)
 )
 ```
-define and run jags model
+Here, we build the basic model where each study's observed cases follow a binomial distribution. We assume the true prevalence rate for each study is unknown, and we give it a flat (uniform) prior, meaning we don't assume anything ahead of time.
 ```{r}
 library(rjags)
 
-# Model: Binomial likelihood with uniform prior on theta
+
 model_string <- "
 model {
   for (i in 1:N) {
@@ -39,17 +35,16 @@ model {
 }
 "
 
-# Compile and run the model
+
 jags_model <- jags.model(textConnection(model_string), data = data_list, n.chains = 3)
 update(jags_model, 1000)  # Burn-in
 samples <- coda.samples(jags_model, variable.names = c("theta"), n.iter = 5000)
-```
 
-plot posterior for one study 
+```
+This chunk plots the posterior distribution for just the first study. It shows what we believe the true prevalence rate is for that specific study after looking at the data. 
 ```{r}
 posterior_matrix <- as.matrix(samples)
 
-# Plot histogram for theta[1]
 hist(posterior_matrix[, 1],
      main = "Posterior Distribution for Study 1",
      xlab = "Prevalence Rate",
@@ -57,16 +52,15 @@ hist(posterior_matrix[, 1],
 ```
 
 
-Posterior Summary for All Studies
+Posterior Summary for All Studies: 
+Instead of looking at just one study, here we summarize the posterior results for all the studies by calculating the mean, standard deviation, and credible intervals for each estimated prevalence rate
 ```{r}
-# Summarize the posterior distributions
 library(coda)
 
 summary_stats <- summary(samples)
 theta_stats <- summary_stats$statistics
 theta_quantiles <- summary_stats$quantiles
 
-# Combine and view as a data frame
 posterior_summary <- data.frame(
   Mean = theta_stats[, "Mean"],
   SD = theta_stats[, "SD"],
@@ -74,57 +68,84 @@ posterior_summary <- data.frame(
   `97.5%` = theta_quantiles[, "97.5%"]
 )
 head(posterior_summary)
+
 ```
 
- Plot Posterior Distributions for Multiple Studies
+ Plot Posterior Distributions for Multiple Studies: This chunk creates a graph showing the density curves for the first five studies’ posterior distributions. It lets us compare how different (or similar) the prevalence rates seem across studies.
 ```{r}
- # Plot density estimates for first 5 studies
-plot(density(posterior_matrix[,1]), main="Posterior Densities for First 5 Studies",
-     xlab="Prevalence Rate", ylim=c(0, 15))
-for (i in 2:5) {
-  lines(density(posterior_matrix[,i]), col=i)
+
+par(mfrow = c(2, 3))
+
+for (i in 1:5) {
+  
+  max_value <- max(posterior_matrix[,i])
+  
+  hist(posterior_matrix[,i], 
+       main = paste("Posterior for Study", i),
+       xlab = "Prevalence Rate",
+       col = "lightblue",
+       border = "white",
+       breaks = 20,
+       xlim = c(0, max_value * 1.2))  # Zoom based on data
 }
-legend("topright", legend=paste("Study", 1:5), col=1:5, lty=1)
+
+
 ```
-Estimate and Plot Overall Prevalence Rate (Pooled)
+Estimate and Plot Overall Prevalence Rate (Pooled):Here we calculate the overall prevalence rate by pooling all the data together. We also plot it on top of the observed proportions to compare individual studies versus the pooled estimate.
 ```{r}
-# Estimate pooled prevalence
 df_clean$p_hat <- df_clean$y / df_clean$n
 pooled_p_hat <- sum(df_clean$y) / sum(df_clean$n)
 
-# Plot histogram of p_hat with pooled prevalence
 hist(df_clean$p_hat, breaks=20, main="Observed Proportions vs. Pooled",
      xlab="Observed Prevalence", col="skyblue", border="white")
 abline(v = pooled_p_hat, col="red", lwd=2, lty=2)
 legend("topright", legend=paste("Pooled:", round(pooled_p_hat, 3)), col="red", lty=2)
+
 ```
-Check Convergence Diagnostics
+Check Convergence Diagnostics: Before trusting our results, we use diagnostics to make sure the model actually converged and that the Markov chains are behaving nicely.
 ```{r}
-# Gelman-Rubin diagnostic
 gelman_diag <- gelman.diag(samples)
 print(gelman_diag)
 
-# Traceplot for a few thetas
 traceplot(samples[, 1:4])
 ```
-Add a Hierarchical Beta-Binomial Model (Hyperprior)
+Add a Hierarchical Beta-Binomial Model (Hyperprior):Instead of treating each study as completely independent, here we build a hierarchical model where all studies share a common Beta distribution, and we estimate its parameters (alpha and beta) too.
+
 ```{r}
-# Convert to matrix
+model_hierarchical <- "
+model {
+  for (i in 1:N) {
+    y[i] ~ dbin(theta[i], n[i])
+    theta[i] ~ dbeta(alpha, beta)
+  }
+  
+  alpha ~ dgamma(1, 0.01)
+  beta ~ dgamma(1, 0.01)
+}
+"
+
+jags_model_hier <- jags.model(textConnection(model_hierarchical), data = data_list, n.chains = 3)
+update(jags_model_hier, 1000)
+samples_hier <- coda.samples(jags_model_hier, variable.names = c("theta", "alpha", "beta"), n.iter = 5000)
+
+
+```
+Analyzing Hyperparameters and Posterior Densities:
+After fitting the hierarchical model, this code looks at the estimated values of alpha and beta and plots the posterior distributions for a few studies under the new model.
+```{r}
 hier_matrix <- as.matrix(samples_hier)
 
-# 1. Summary of hyperparameters
 alpha_post <- hier_matrix[, "alpha"]
 beta_post <- hier_matrix[, "beta"]
 
 cat("Posterior mean of alpha:", round(mean(alpha_post), 3), "\n")
 cat("Posterior mean of beta:", round(mean(beta_post), 3), "\n")
 
-# 2. Plot posterior for alpha and beta
+# Plots
 par(mfrow=c(1,2))
 hist(alpha_post, main="Posterior of alpha", col="lightcoral", xlab="alpha", border="white")
 hist(beta_post, main="Posterior of beta", col="lightblue", xlab="beta", border="white")
 
-# 3. Plot a few posterior theta distributions
 par(mfrow=c(1,1))
 plot(density(hier_matrix[, "theta[1]"]), main="Posterior Densities (Hierarchical Model)",
      xlab="Prevalence Rate", ylim=c(0, 15), col=1)
@@ -134,14 +155,14 @@ for (i in 2:5) {
 legend("topright", legend=paste("Study", 1:5), col=1:5, lty=1)
 
 ```
-Posterior Predictive Checks
+Posterior Predictive Checks (PPC):
+Posterior predictive checks are like a "reality check" , we simulate new fake datasets from our model and see if they match the real-world data we observed.
 ```{r}
-# Extend model to include replicated data for PPC
 model_ppc <- "
 model {
   for (i in 1:N) {
     y[i] ~ dbin(theta[i], n[i])
-    y_rep[i] ~ dbin(theta[i], n[i])  # Replicated data
+    y_rep[i] ~ dbin(theta[i], n[i])
     theta[i] ~ dbeta(1, 1)
   }
 }
@@ -152,39 +173,38 @@ jags_ppc <- jags.model(textConnection(model_ppc), data = data_list_ppc, n.chains
 update(jags_ppc, 1000)
 ppc_samples <- coda.samples(jags_ppc, variable.names = c("y_rep"), n.iter = 5000)
 
-# Extract y_rep matrix
 y_rep_matrix <- as.matrix(ppc_samples)
 y_rep_means <- colMeans(y_rep_matrix)
 
-# Plot observed vs. predicted
 plot(df_clean$y, y_rep_means, main="Posterior Predictive Check",
      xlab="Observed Cases", ylab="Predicted Cases", col="blue", pch=16)
 abline(0, 1, col="red", lty=2)
+
 ```
-Map Visualization by Country (if location data exists)
+Mapping Autism Prevalence by Country:
+If our dataset includes country names, we can plot the estimated prevalence rates across the world to spot geographic patterns.
 ```{r}
 library(ggplot2)
 library(dplyr)
 library(rnaturalearth)
 library(rnaturalearthdata)
 
-# If 'Country' exists, compute average posterior means per country
 country_means <- df_clean %>%
   mutate(theta_mean = colMeans(posterior_matrix)) %>%
   group_by(Country) %>%
   summarise(MeanPrevalence = mean(theta_mean))
 
-# World map data
 world <- ne_countries(scale = "medium", returnclass = "sf")
 
-# Merge with map
 world_map <- left_join(world, country_means, by = c("name" = "Country"))
 
-# Plot the map
 ggplot(data = world_map) +
   geom_sf(aes(fill = MeanPrevalence)) +
   scale_fill_viridis_c(option = "plasma", na.value = "grey90") +
   labs(title = "Estimated Autism Prevalence by Country",
        fill = "Prevalence") +
   theme_minimal()
+
+
+
 ```
