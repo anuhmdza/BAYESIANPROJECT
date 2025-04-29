@@ -1,4 +1,3 @@
-# Let's create the README.md file based on the latest content requested
 readme_content = """# Bayesian Project - Autism Prevalence Analysis
 Author: Ana Mendoza & Marali Benitez  
 Date: April 8, 2025
