@@ -2,7 +2,11 @@
 title: "BAYESIAN PROJECT"
 author: "Ana Mendoza"
 date: "2025-04-08"
-output: word_document
+output: slidy_presentation
+---
+
+### The Data Set
+
 ---
 load and clean the dataset 
 ```{r}
@@ -21,6 +25,7 @@ data_list <- list(
   N = nrow(df_clean)
 )
 ```
+
 Here, we build the basic model where each study's observed cases follow a binomial distribution. We assume the true prevalence rate for each study is unknown, and we give it a flat (uniform) prior, meaning we don't assume anything ahead of time.
 ```{r}
 library(rjags)
@@ -148,7 +153,7 @@ hist(beta_post, main="Posterior of beta", col="lightblue", xlab="beta", border="
 
 par(mfrow=c(1,1))
 plot(density(hier_matrix[, "theta[1]"]), main="Posterior Densities (Hierarchical Model)",
-     xlab="Prevalence Rate", ylim=c(0, 15), col=1)
+     xlab="Prevalence Rate", ylim=c(0, 10000), col=1)
 for (i in 2:5) {
   lines(density(hier_matrix[, paste0("theta[", i, "]")]), col=i)
 }
@@ -181,6 +186,7 @@ plot(df_clean$y, y_rep_means, main="Posterior Predictive Check",
 abline(0, 1, col="red", lty=2)
 
 ```
+
 Mapping Autism Prevalence by Country:
 If our dataset includes country names, we can plot the estimated prevalence rates across the world to spot geographic patterns.
 ```{r}
