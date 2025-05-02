@@ -37,10 +37,12 @@ df_clean <- df[!is.na(df$Sample.Size) & !is.na(df$Number.of.Cases), ]
 df_clean$y <- df_clean$Number.of.Cases
 df_clean$n <- df_clean$Sample.Size
 df_clean$Country <- recode(df_clean$Country, USA = "United States of America")
+df_clean$Country <- recode(df_clean$Country, "Basque Country, Spain" = "Spain")
 df_clean <- df_clean %>% filter(Year.Published>=2000)
+ggplot(df_clean, aes(x = reorder(Country, Country, function(x) length(x)))) + geom_bar(fill = "lightblue") + geom_text(stat='count',aes(label=..count..)) + coord_flip() + ggtitle("Number of Studies by Country") + ylab("Country") + xlab("Frequency") 
 ```
 
-After cleaning and filtering the data for studies published after 2000, we are left with 144 studies. 
+After cleaning and filtering the data for studies published after 2000, we are left with 144 studies. Most of these studies come from the United States, with England and Canada following in frequency. All 144 studies in our clean data set will be used to try and calculate the autism prevalence rate in each respective country.
 
 
 ---
