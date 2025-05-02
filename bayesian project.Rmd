@@ -2,22 +2,52 @@
 title: "BAYESIAN PROJECT"
 author: "Ana Mendoza"
 date: "2025-04-08"
-output: slidy_presentation
+output:
+  slidy_presentation: default
+  ioslides_presentation: default
 ---
+
+### Introduction
+
+Autism spectrum disorder (ASD) is a disorder that affects how people interact with the world around them. Usually, it presents itself as difficulty interacting or communicating with others and repetitive behaviors (Geschwind, 2025). ASD is typically detected in children before the age of 2, and can vary in terms of symptoms and their intensity (Mayo Clinic, 2025). Although it has no cure, early detection and treatment can be extremely effective in helping children succeed. 
+
+As autism detection techniques advance, different countries have different approaches as to how they study and treat autism. Our purpose in this project was to try and find if there is a true difference in autism prevalence internationally. By knowing the true prevalence of autism in a country, that country may be able to better allocate resources to help support those with autism.
+
+
+---
+
 
 ### The Data Set
 
+The data set we will be using is the Autism Prevalence Studies data set collected by the U.S. Department of Health and Human Services and made accessible by Marilia Prata through Kaggle. It contains information from various peer-reviewed autism prevalence studies conducted around the world. The requirements for a study being included in this compilation were that the study was conducted in English, that it produced at least one autism prevalence estimate, and that the study was population based within a defined geographic area. The way the data was collected varies from study to study, but the most common methods include in-person,mailed, or online surveys, and collecting health, government, or educational records.  In order to collect all of this data, a PubMed search was conducted to identify studies published at any time through September 2020 using the search terms: autism (title/abstract) OR autistic (title/abstract) AND prevalence (title/abstract) (Prata, 2023). The data set includes studies from 43 countries, and the variables we will be focusing on and using in our calculations are the country where the study took place, the sample size of the study, and the number of cases of autism found in the study. We will also limit ourselves to studies published from the year 2000 onward.
+
+
 ---
-load and clean the dataset 
+
+
+Load and clean the dataset 
+
 ```{r}
+library(tidyverse)
+library(ggplot2)
 df <- read.csv("Autism Studies Dataset.csv")
 
 df_clean <- df[!is.na(df$Sample.Size) & !is.na(df$Number.of.Cases), ]
 
 df_clean$y <- df_clean$Number.of.Cases
 df_clean$n <- df_clean$Sample.Size
+df_clean$Country <- recode(df_clean$Country, USA = "United States of America")
+df_clean <- df_clean %>% filter(Year.Published>=2000)
 ```
-prepare data for jags 
+
+After cleaning and filtering the data for studies published after 2000, we are left with 144 studies. 
+
+
+---
+
+
+Prepare data for jags 
+
 ```{r}
 data_list <- list(
   y = as.integer(df_clean$y),
@@ -26,7 +56,12 @@ data_list <- list(
 )
 ```
 
+
+---
+
+
 Here, we build the basic model where each study's observed cases follow a binomial distribution. We assume the true prevalence rate for each study is unknown, and we give it a flat (uniform) prior, meaning we don't assume anything ahead of time.
+
 ```{r}
 library(rjags)
 
@@ -153,7 +188,7 @@ hist(beta_post, main="Posterior of beta", col="lightblue", xlab="beta", border="
 
 par(mfrow=c(1,1))
 plot(density(hier_matrix[, "theta[1]"]), main="Posterior Densities (Hierarchical Model)",
-     xlab="Prevalence Rate", ylim=c(0, 10000), col=1)
+     xlab="Prevalence Rate", ylim=c(0, 2000), col=1)
 for (i in 2:5) {
   lines(density(hier_matrix[, paste0("theta[", i, "]")]), col=i)
 }
