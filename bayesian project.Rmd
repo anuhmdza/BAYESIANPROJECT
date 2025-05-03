@@ -88,7 +88,7 @@ model_string <- "model{
 }" 
 
 data_list <- list(y=y, n=n, n_groups = n_groups, x=x)
-jags_model <- jags.model(textConnection(model_string), data = data_list, n.chains = 3)
+jags_model <- jags.model(textConnection(model_string), data = data_list, n.chains = 5)
 update(jags_model, 1000)  # Burn-in
 samples <- coda.samples(jags_model, variable.names = c("theta", "mu", "kappa"), n.iter = 5000)
 
@@ -101,13 +101,13 @@ samples <- coda.samples(jags_model, variable.names = c("theta", "mu", "kappa"), 
 
 ```{r}
 source("DBDA2E-utilities.R")
-diagMCMC(samples, saveName = "diagMCMCproject",saveType = "jpg")
-DbdaAcfPlot(samples)
-DbdaDensPlot(samples)
+#diagMCMC(samples, saveName = "diagMCMCproject",saveType = "jpg")
+#DbdaAcfPlot(samples)
+#DbdaDensPlot(samples)
 ```
 
-
-
+![](diagMCMCprojectDiagkappa.jpg)
+*After generating 5 chains and burning in 1000, the MCMC diagnostics are above. We can see that the MCMC algorithm is working, as the trace plot kind of looks like a "hairy caterpillar". We can also see that the MCSE is very close to 0 (meaning that the run-to-run variability of the estimates very small). The ESS value is 3558.1, and since the value is so large, we can assume that the estimates do not vary much from run-to-run. The shrink factor is also close to 1, meaning that we can assume convergence.*
 
 ---
 
