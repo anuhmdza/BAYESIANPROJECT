@@ -25,7 +25,7 @@ The data set we will be using is the Autism Prevalence Studies data set collecte
 ---
 
 
-Load and clean the dataset 
+#### Load and clean the dataset 
 
 ```{r}
 library(tidyverse)
@@ -38,11 +38,14 @@ df_clean$y <- df_clean$Number.of.Cases
 df_clean$n <- df_clean$Sample.Size
 df_clean$Country <- recode(df_clean$Country, USA = "United States of America")
 df_clean$Country <- recode(df_clean$Country, "Basque Country, Spain" = "Spain")
+df_clean$Country <- recode(df_clean$Country, "Caribbean" = "Aruba")
 df_clean <- df_clean %>% filter(Year.Published>=2000)
-ggplot(df_clean, aes(x = reorder(Country, Country, function(x) length(x)))) + geom_bar(fill = "lightblue") + geom_text(stat='count',aes(label=..count..)) + coord_flip() + ggtitle("Number of Studies by Country") + ylab("Country") + xlab("Frequency") 
+df_clean <- df_clean %>% mutate(Proportion = y/n) 
+df_clean$country_factor <- fct_reorder(df_clean$Country, df_clean$Proportion)
+ggplot(df_clean, aes(x = reorder(Country, Country, function(x) length(x)))) + geom_bar(fill = "lightblue") + geom_text(stat='count',aes(label=..count..)) + coord_flip() + ggtitle("Number of Studies by Country") + ylab("Frequency") + xlab("Country") 
 ```
 
-After cleaning and filtering the data for studies published after 2000, we are left with 144 studies. Most of these studies come from the United States, with England and Canada following in frequency. All 144 studies in our clean data set will be used to try and calculate the autism prevalence rate in each respective country.
+After cleaning and filtering the data for studies published after 2000, we are left with 144 studies. Most of these studies come from the United States, with England and Canada following in frequency. All 144 studies in our clean data set will be used to try and calculate the autism prevalence rate in each respective country. We will be using JAGS and a hierarchical Beta-Binomial model for our calculations.
 
 
 ---
@@ -51,38 +54,86 @@ After cleaning and filtering the data for studies published after 2000, we are l
 Prepare data for jags 
 
 ```{r}
-data_list <- list(
-  y = as.integer(df_clean$y),
-  n = as.integer(df_clean$n),
-  N = nrow(df_clean)
-)
+# data for JAGS
+y <-  as.integer(df_clean$y) #number of cases
+n <- as.integer(df_clean$n) #number of samples
+x <- length(y)
+n_groups <-  length(unique(df_clean$Country))
 ```
 
 
----
-
-
-Here, we build the basic model where each study's observed cases follow a binomial distribution. We assume the true prevalence rate for each study is unknown, and we give it a flat (uniform) prior, meaning we don't assume anything ahead of time.
+Here, we build the basic model where each study's observed cases follow a binomial distribution. We assume the true prevalence rate for each country is unknown, and we give it a flat (uniform) prior, meaning we don't assume anything ahead of time, and want to let the data speak for itself.
 
 ```{r}
 library(rjags)
 
 
-model_string <- "
-model {
-  for (i in 1:N) {
-    y[i] ~ dbin(theta[i], n[i])
-    theta[i] ~ dbeta(1, 1)
+model_string <- "model{
+
+  # Likelihood
+  for (i in 1:n_groups){
+    y[i] ~ dbinom(theta[i], n[i])
   }
-}
-"
 
+  # Prior
+  for (j in 1:x){
+    theta[j] ~ dbeta(mu * kappa, (1 - mu) * kappa)
+  }
+  
+  
+  # Hyperprior, phi=(mu, kappa)
+  #uninformative prior for mu and kappa
+  mu ~ dbeta(1, 1)
+  kappa ~ dgamma(1, 0.1)
+}" 
 
+data_list <- list(y=y, n=n, n_groups = n_groups, x=x)
 jags_model <- jags.model(textConnection(model_string), data = data_list, n.chains = 3)
 update(jags_model, 1000)  # Burn-in
-samples <- coda.samples(jags_model, variable.names = c("theta"), n.iter = 5000)
+samples <- coda.samples(jags_model, variable.names = c("theta", "mu", "kappa"), n.iter = 5000)
 
 ```
+
+---
+
+
+### Diagnostics for MCMC Simulation
+
+```{r}
+source("DBDA2E-utilities.R")
+diagMCMC(posterior_sample, saveName = "diagMCMCeg",saveType = "jpg")
+DbdaAcfPlot(posterior_sample)
+DbdaDensPlot(posterior_sample)
+```
+
+
+
+
+---
+
+
+```{r}
+# Convert to data.frame
+posterior_df <- as.data.frame(do.call(rbind, samples))
+
+# Extract artist names
+countries <- levels(df_clean$country_factor)
+
+posterior_df %>%
+ select(kappa, mu) %>%
+ pivot_longer(everything()) %>%
+ ggplot(aes(x = value, fill = name)) +
+ geom_density(alpha = 0.6) +
+ facet_wrap(~name, scales = "free") +
+ labs(title = "Posterior Densities of Hyperparameters") +
+ theme_minimal()
+```
+
+Above are the posterior densities of our hyper parameters kappa and mu. Kappa seems to be centered around 120 and Mu seems to be centered around .007.
+
+---
+
+
 This chunk plots the posterior distribution for just the first study. It shows what we believe the true prevalence rate is for that specific study after looking at the data. 
 ```{r}
 posterior_matrix <- as.matrix(samples)
