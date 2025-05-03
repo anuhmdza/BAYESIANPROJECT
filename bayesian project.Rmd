@@ -101,9 +101,9 @@ samples <- coda.samples(jags_model, variable.names = c("theta", "mu", "kappa"), 
 
 ```{r}
 source("DBDA2E-utilities.R")
-diagMCMC(posterior_sample, saveName = "diagMCMCeg",saveType = "jpg")
-DbdaAcfPlot(posterior_sample)
-DbdaDensPlot(posterior_sample)
+diagMCMC(samples, saveName = "diagMCMCproject",saveType = "jpg")
+DbdaAcfPlot(samples)
+DbdaDensPlot(samples)
 ```
 
 
