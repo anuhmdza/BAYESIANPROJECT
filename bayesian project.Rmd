@@ -30,18 +30,29 @@ The data set we will be using is the Autism Prevalence Studies data set collecte
 ```{r}
 library(tidyverse)
 library(ggplot2)
+library(bayesrules)
+library(rjags)
+library(coda)
 df <- read.csv("Autism Studies Dataset.csv")
 
 df_clean <- df[!is.na(df$Sample.Size) & !is.na(df$Number.of.Cases), ]
 
 df_clean$y <- df_clean$Number.of.Cases
 df_clean$n <- df_clean$Sample.Size
+df_clean <- df_clean %>% mutate(Proportion = y/n)
+
+#changing name of some countries
 df_clean$Country <- recode(df_clean$Country, USA = "United States of America")
 df_clean$Country <- recode(df_clean$Country, "Basque Country, Spain" = "Spain")
 df_clean$Country <- recode(df_clean$Country, "Caribbean" = "Aruba")
+
+#limiting dataset to 2000 and onward
 df_clean <- df_clean %>% filter(Year.Published>=2000)
-df_clean <- df_clean %>% mutate(Proportion = y/n) 
-df_clean$country_factor <- fct_reorder(df_clean$Country, df_clean$Proportion)
+df_clean$country_factor <- fct_reorder(df_clean$Country, df_clean$Proportion, .fun = 'mean')
+df_clean$country_index <- as.numeric(df_clean$country_factor)
+
+#only selecting necessary variables from dataset
+df_clean <- df_clean %>% select(Country, y,n, Proportion, country_factor, country_index)
 ggplot(df_clean, aes(x = reorder(Country, Country, function(x) length(x)))) + geom_bar(fill = "lightblue") + geom_text(stat='count',aes(label=..count..)) + coord_flip() + ggtitle("Number of Studies by Country") + ylab("Frequency") + xlab("Country") 
 ```
 
@@ -59,6 +70,7 @@ y <-  as.integer(df_clean$y) #number of cases
 n <- as.integer(df_clean$n) #number of samples
 x <- length(y)
 n_groups <-  length(unique(df_clean$Country))
+country_index <- df_clean$country_index
 ```
 
 
@@ -71,12 +83,12 @@ library(rjags)
 model_string <- "model{
 
   # Likelihood
-  for (i in 1:n_groups){
-    y[i] ~ dbinom(theta[i], n[i])
+  for (i in 1:x){
+    y[i] ~ dbinom(theta[country_index[i]], n[i])
   }
 
   # Prior
-  for (j in 1:x){
+  for (j in 1:n_groups){
     theta[j] ~ dbeta(mu * kappa, (1 - mu) * kappa)
   }
   
@@ -87,7 +99,7 @@ model_string <- "model{
   kappa ~ dgamma(1, 0.1)
 }" 
 
-data_list <- list(y=y, n=n, n_groups = n_groups, x=x)
+data_list <- list(y=y, n=n, n_groups = n_groups, x=x, country_index = country_index)
 jags_model <- jags.model(textConnection(model_string), data = data_list, n.chains = 5)
 update(jags_model, 1000)  # Burn-in
 samples <- coda.samples(jags_model, variable.names = c("theta", "mu", "kappa"), n.iter = 5000)
@@ -116,8 +128,6 @@ source("DBDA2E-utilities.R")
 # Convert to data.frame
 posterior_df <- as.data.frame(do.call(rbind, samples))
 
-# Extract artist names
-countries <- levels(df_clean$country_factor)
 
 posterior_df %>%
  select(kappa, mu) %>%
@@ -129,10 +139,54 @@ posterior_df %>%
  theme_minimal()
 ```
 
-Above are the posterior densities of our hyper parameters kappa and mu. Kappa seems to be centered around 120 and Mu seems to be centered around .007.
+Above are the posterior densities of our hyper parameters kappa and mu. Kappa seems to be centered around 30 and Mu seems to be centered around .014.
 
 ---
 
+
+## Posterior estimate of Theta + 95% Confidence Interval by Country
+
+```{r}
+# Extract artist names
+countries <- levels(df_clean$country_factor)
+
+theta_means <- posterior_df %>%
+ select(starts_with("theta[")) %>%
+ summarise(across(everything(), list(mean = mean, lower = ~quantile(.x, 0.025), upper = ~quantile(.x, 0.975)))) %>%
+ pivot_longer(everything(), names_to = c("param", ".value"), names_pattern = "theta\\[(\\d+)\\]_(.*)") %>%
+ mutate(Country = countries[as.integer(param)])
+
+# Plot: Artist posterior mean + 95% CI
+ggplot(theta_means, aes(x = mean, y = fct_reorder(Country, mean))) +
+ geom_point(color = "steelblue") +
+ geom_errorbarh(aes(xmin = lower, xmax = upper), height = 0.3) +
+ labs(title = "Posterior Estimate of Autism Prevalence with 95% Intervals by Country", x = "Prevalence", y = "Country") +
+ theme_bw()
+
+
+```
+
+According to our confidence intervals above, most countries mean autism prevalence are under 1%, with a very small 95% posterior credible interval, with the exception of Lebanon, which has a 95% posterior credible interval of (.229,.283). The only study included from Lebanon had a sample size of 998 people with 263 of them having ASD, so we can see that the data from that study heavily influenced the posterior.
+
+---
+
+
+### Mapping the posteior estimates
+
+```{r}
+world <- ne_countries(scale = "medium", returnclass = "sf")
+
+world_map <- left_join(world, theta_means, by = c("name" = "Country"))
+
+ggplot(data = world_map) +
+  geom_sf(aes(fill = mean)) +
+  scale_fill_viridis_c(option = "plasma", na.value = "grey90") +
+  labs(title = "Estimated Autism Prevalence by Country",
+       fill = "Prevalence") +
+  theme_bw()
+```
+
+---
 
 This chunk plots the posterior distribution for just the first study. It shows what we believe the true prevalence rate is for that specific study after looking at the data. 
 ```{r}
