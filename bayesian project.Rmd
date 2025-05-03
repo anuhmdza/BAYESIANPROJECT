@@ -119,7 +119,8 @@ source("DBDA2E-utilities.R")
 ```
 
 ![](diagMCMCprojectDiagkappa.jpg)
-*After generating 5 chains and burning in 1000, the MCMC diagnostics are above. We can see that the MCMC algorithm is working, as the trace plot kind of looks like a "hairy caterpillar". We can also see that the MCSE is very close to 0 (meaning that the run-to-run variability of the estimates very small). The ESS value is 3558.1, and since the value is so large, we can assume that the estimates do not vary much from run-to-run. The shrink factor is also close to 1, meaning that we can assume convergence.*
+
+After generating 5 chains and burning in 1000, the MCMC diagnostics are above. We can see that the MCMC algorithm is working, as the trace plot kind of looks like a "hairy caterpillar". We can also see that the MCSE is very close to 0 (meaning that the run-to-run variability of the estimates very small). The ESS value is 3558.1, and since the value is so large, we can assume that the estimates do not vary much from run-to-run. The shrink factor is also close to 1, meaning that we can assume convergence.
 
 ---
 
@@ -174,6 +175,8 @@ According to our confidence intervals above, most countries mean autism prevalen
 ### Mapping the posteior estimates
 
 ```{r}
+library(rnaturalearth)
+library(rnaturalearthdata)
 world <- ne_countries(scale = "medium", returnclass = "sf")
 
 world_map <- left_join(world, theta_means, by = c("name" = "Country"))
@@ -186,7 +189,9 @@ ggplot(data = world_map) +
   theme_bw()
 ```
 
+
 ---
+
 
 This chunk plots the posterior distribution for just the first study. It shows what we believe the true prevalence rate is for that specific study after looking at the data. 
 ```{r}
@@ -259,99 +264,99 @@ traceplot(samples[, 1:4])
 Add a Hierarchical Beta-Binomial Model (Hyperprior):Instead of treating each study as completely independent, here we build a hierarchical model where all studies share a common Beta distribution, and we estimate its parameters (alpha and beta) too.
 
 ```{r}
-model_hierarchical <- "
-model {
-  for (i in 1:N) {
-    y[i] ~ dbin(theta[i], n[i])
-    theta[i] ~ dbeta(alpha, beta)
-  }
+#model_hierarchical <- "
+#model {
+#  for (i in 1:N) {
+#    y[i] ~ dbin(theta[i], n[i])
+#    theta[i] ~ dbeta(alpha, beta)
+#  }
   
-  alpha ~ dgamma(1, 0.01)
-  beta ~ dgamma(1, 0.01)
-}
-"
+#  alpha ~ dgamma(1, 0.01)
+#  beta ~ dgamma(1, 0.01)
+#}
+#"
 
-jags_model_hier <- jags.model(textConnection(model_hierarchical), data = data_list, n.chains = 3)
-update(jags_model_hier, 1000)
-samples_hier <- coda.samples(jags_model_hier, variable.names = c("theta", "alpha", "beta"), n.iter = 5000)
+#jags_model_hier <- jags.model(textConnection(model_hierarchical), data = data_list, n.chains = 3)
+#update(jags_model_hier, 1000)
+#samples_hier <- coda.samples(jags_model_hier, variable.names = c("theta", "alpha", "beta"), n.iter = 5000)
 
 
 ```
 Analyzing Hyperparameters and Posterior Densities:
 After fitting the hierarchical model, this code looks at the estimated values of alpha and beta and plots the posterior distributions for a few studies under the new model.
 ```{r}
-hier_matrix <- as.matrix(samples_hier)
-
-alpha_post <- hier_matrix[, "alpha"]
-beta_post <- hier_matrix[, "beta"]
-
-cat("Posterior mean of alpha:", round(mean(alpha_post), 3), "\n")
-cat("Posterior mean of beta:", round(mean(beta_post), 3), "\n")
-
-# Plots
-par(mfrow=c(1,2))
-hist(alpha_post, main="Posterior of alpha", col="lightcoral", xlab="alpha", border="white")
-hist(beta_post, main="Posterior of beta", col="lightblue", xlab="beta", border="white")
-
-par(mfrow=c(1,1))
-plot(density(hier_matrix[, "theta[1]"]), main="Posterior Densities (Hierarchical Model)",
-     xlab="Prevalence Rate", ylim=c(0, 2000), col=1)
-for (i in 2:5) {
-  lines(density(hier_matrix[, paste0("theta[", i, "]")]), col=i)
-}
-legend("topright", legend=paste("Study", 1:5), col=1:5, lty=1)
+# hier_matrix <- as.matrix(samples_hier)
+# 
+# alpha_post <- hier_matrix[, "alpha"]
+# beta_post <- hier_matrix[, "beta"]
+# 
+# cat("Posterior mean of alpha:", round(mean(alpha_post), 3), "\n")
+# cat("Posterior mean of beta:", round(mean(beta_post), 3), "\n")
+# 
+# # Plots
+# par(mfrow=c(1,2))
+# hist(alpha_post, main="Posterior of alpha", col="lightcoral", xlab="alpha", border="white")
+# hist(beta_post, main="Posterior of beta", col="lightblue", xlab="beta", border="white")
+# 
+# par(mfrow=c(1,1))
+# plot(density(hier_matrix[, "theta[1]"]), main="Posterior Densities (Hierarchical Model)",
+#      xlab="Prevalence Rate", ylim=c(0, 2000), col=1)
+# for (i in 2:5) {
+#   lines(density(hier_matrix[, paste0("theta[", i, "]")]), col=i)
+# }
+# legend("topright", legend=paste("Study", 1:5), col=1:5, lty=1)
 
 ```
 Posterior Predictive Checks (PPC):
 Posterior predictive checks are like a "reality check" , we simulate new fake datasets from our model and see if they match the real-world data we observed.
 ```{r}
-model_ppc <- "
-model {
-  for (i in 1:N) {
-    y[i] ~ dbin(theta[i], n[i])
-    y_rep[i] ~ dbin(theta[i], n[i])
-    theta[i] ~ dbeta(1, 1)
-  }
-}
-"
-
-data_list_ppc <- data_list
-jags_ppc <- jags.model(textConnection(model_ppc), data = data_list_ppc, n.chains = 3)
-update(jags_ppc, 1000)
-ppc_samples <- coda.samples(jags_ppc, variable.names = c("y_rep"), n.iter = 5000)
-
-y_rep_matrix <- as.matrix(ppc_samples)
-y_rep_means <- colMeans(y_rep_matrix)
-
-plot(df_clean$y, y_rep_means, main="Posterior Predictive Check",
-     xlab="Observed Cases", ylab="Predicted Cases", col="blue", pch=16)
-abline(0, 1, col="red", lty=2)
+# model_ppc <- "
+# model {
+#   for (i in 1:N) {
+#     y[i] ~ dbin(theta[i], n[i])
+#     y_rep[i] ~ dbin(theta[i], n[i])
+#     theta[i] ~ dbeta(1, 1)
+#   }
+# }
+# "
+# 
+# data_list_ppc <- data_list
+# jags_ppc <- jags.model(textConnection(model_ppc), data = data_list_ppc, n.chains = 3)
+# update(jags_ppc, 1000)
+# ppc_samples <- coda.samples(jags_ppc, variable.names = c("y_rep"), n.iter = 5000)
+# 
+# y_rep_matrix <- as.matrix(ppc_samples)
+# y_rep_means <- colMeans(y_rep_matrix)
+# 
+# plot(df_clean$y, y_rep_means, main="Posterior Predictive Check",
+#      xlab="Observed Cases", ylab="Predicted Cases", col="blue", pch=16)
+# abline(0, 1, col="red", lty=2)
 
 ```
 
 Mapping Autism Prevalence by Country:
 If our dataset includes country names, we can plot the estimated prevalence rates across the world to spot geographic patterns.
 ```{r}
-library(ggplot2)
-library(dplyr)
-library(rnaturalearth)
-library(rnaturalearthdata)
-
-country_means <- df_clean %>%
-  mutate(theta_mean = colMeans(posterior_matrix)) %>%
-  group_by(Country) %>%
-  summarise(MeanPrevalence = mean(theta_mean))
-
-world <- ne_countries(scale = "medium", returnclass = "sf")
-
-world_map <- left_join(world, country_means, by = c("name" = "Country"))
-
-ggplot(data = world_map) +
-  geom_sf(aes(fill = MeanPrevalence)) +
-  scale_fill_viridis_c(option = "plasma", na.value = "grey90") +
-  labs(title = "Estimated Autism Prevalence by Country",
-       fill = "Prevalence") +
-  theme_minimal()
+# library(ggplot2)
+# library(dplyr)
+# library(rnaturalearth)
+# library(rnaturalearthdata)
+# 
+# country_means <- df_clean %>%
+#   mutate(theta_mean = colMeans(posterior_matrix)) %>%
+#   group_by(Country) %>%
+#   summarise(MeanPrevalence = mean(theta_mean))
+# 
+# world <- ne_countries(scale = "medium", returnclass = "sf")
+# 
+# world_map <- left_join(world, country_means, by = c("name" = "Country"))
+# 
+# ggplot(data = world_map) +
+#   geom_sf(aes(fill = MeanPrevalence)) +
+#   scale_fill_viridis_c(option = "plasma", na.value = "grey90") +
+#   labs(title = "Estimated Autism Prevalence by Country",
+#        fill = "Prevalence") +
+#   theme_minimal()
 
 
 
