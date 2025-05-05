@@ -74,7 +74,7 @@ country_index <- df_clean$country_index
 ```
 
 
-Here, we build the basic model where each study's observed cases follow a binomial distribution. We assume the true prevalence rate for each country is unknown, and we give it a flat (uniform) prior, meaning we don't assume anything ahead of time, and want to let the data speak for itself.
+Here, we build the basic model where each country's observed cases follow a binomial distribution. We assume the true prevalence rate for each country is unknown, and we give it a flat (uniform) prior, meaning we don't assume anything ahead of time, because we want to let the data speak for itself.
 
 ```{r}
 library(rjags)
