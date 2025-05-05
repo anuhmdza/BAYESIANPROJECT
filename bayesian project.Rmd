@@ -1,6 +1,6 @@
 ---
 title: "BAYESIAN PROJECT"
-author: "Ana Mendoza"
+author: "Ana Mendoza and Marali Benitez"
 date: "2025-04-08"
 output:
   slidy_presentation: default
@@ -120,7 +120,7 @@ source("DBDA2E-utilities.R")
 
 ![](diagMCMCprojectDiagkappa.jpg)
 
-After generating 5 chains and burning in 1000, the MCMC diagnostics are above. We can see that the MCMC algorithm is working, as the trace plot kind of looks like a "hairy caterpillar". We can also see that the MCSE is very close to 0 (meaning that the run-to-run variability of the estimates very small). The ESS value is 3558.1, and since the value is so large, we can assume that the estimates do not vary much from run-to-run. The shrink factor is also close to 1, meaning that we can assume convergence.
+After generating 5 chains and burning in 1000, the MCMC diagnostics are shown above. We can see that the MCMC algorithm is working, as the trace plot kind of looks like a "hairy caterpillar". We can also see that the MCSE is very close to 0 (meaning that the run-to-run variability of the estimates is very small). The ESS value is 3558.1, and since the value is so large, we can assume that the estimates do not vary much from run-to-run. The shrink factor is also close to 1, meaning that we can assume convergence.
 
 ---
 
@@ -148,7 +148,7 @@ Above are the posterior densities of our hyper parameters kappa and mu. Kappa se
 ## Posterior estimate of Theta + 95% Confidence Interval by Country
 
 ```{r}
-# Extract artist names
+# Extract country names
 countries <- levels(df_clean$country_factor)
 
 theta_means <- posterior_df %>%
@@ -161,18 +161,18 @@ theta_means <- posterior_df %>%
 ggplot(theta_means, aes(x = mean, y = fct_reorder(Country, mean))) +
  geom_point(color = "steelblue") +
  geom_errorbarh(aes(xmin = lower, xmax = upper), height = 0.3) +
- labs(title = "Posterior Estimate of Autism Prevalence with 95% Intervals by Country", x = "Prevalence", y = "Country") +
+ labs(title = "Posterior Estimate of Theta with 95% Intervals by Country", x = "Prevalence", y = "Country") +
  theme_bw()
 
 
 ```
 
-According to our confidence intervals above, most countries mean autism prevalence are under 1%, with a very small 95% posterior credible interval, with the exception of Lebanon, which has a 95% posterior credible interval of (.229,.283). The only study included from Lebanon had a sample size of 998 people with 263 of them having ASD, so we can see that the data from that study heavily influenced the posterior.
+According to our confidence intervals above, most countries mean autism prevalence are under 1%, with a very small 95% posterior credible interval, with the exception of Lebanon, which has a 95% posterior credible interval of (.229,.283), which is unusually high. The only study included from Lebanon had a sample size of 998 people with 263 of them having ASD, so we can see that the data from that study heavily influenced the posterior.
 
 ---
 
 
-### Mapping the posteior estimates
+### Mapping the posterior estimates
 
 ```{r}
 library(rnaturalearth)
@@ -188,6 +188,33 @@ ggplot(data = world_map) +
        fill = "Prevalence") +
   theme_bw()
 ```
+
+
+---
+
+
+### Conclusions
+
+Our results for the prevalence rate of ASD falls relatively close to the World Health Organization's estimate for the worldwide autism rate, which is 1 in 100 people (or about 1%) (World Health Organization, 2023). 
+
+In order to improve our calculations in the future, inclusion of more recent studies and more data from underrepresented countries would be helpful. Despite the possible limitations of our research, our results overall suggest that there is not much of a difference in terms of autism rates between countries. Governments and organizations should take this into account in order to best support those with ASD to help them succeed.
+
+
+
+
+---
+
+
+### Works Cited
+
+-“Autism spectrum disorder - Symptoms and causes.” Mayo Clinic, 19 April 2025, https://www.mayoclinic.org/diseases-conditions/autism-spectrum-disorder/symptoms-causes/syc-20352928. 
+
+-Geschwind, Daniel H. “Advances in autism.” Annual review of medicine vol. 60 (2009): 367-80. doi:10.1146/annurev.med.60.053107.121225
+
+-Prata, Marilia. “Autism Prevalence Studies.” Data table describing autism prevalence studies compiled by the U.S. Department of Human and Health Services. Kaggle, 2023, https://www.kaggle.com/datasets/mpwolke/cusersmarildownloadscsv-1csv.
+
+-World Health Organization. “Autism.” World Health Organization (WHO), 15 November 2023, https://www.who.int/news-room/fact-sheets/detail/autism-spectrum-disorders.
+
 
 
 ---
