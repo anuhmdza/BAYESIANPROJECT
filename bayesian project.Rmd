@@ -61,7 +61,7 @@ After cleaning and filtering the data for studies published after 2000, we are l
 ---
 
 
-Prepare data for jags 
+### Prepare data for jags 
 
 ```{r}
 # data for JAGS
@@ -123,6 +123,7 @@ After generating 5 chains and burning in 1000, the MCMC diagnostics are shown ab
 
 ---
 
+### Posterior densities of hyperparameters
 
 ```{r}
 # Convert to data.frame
